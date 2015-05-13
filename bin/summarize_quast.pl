@@ -24,10 +24,12 @@ use warnings;
 use autodie;
 use Getopt::Long; # use GetOptions function to for CL args
 
-my ($debug,$verbose,$help,$infile);
+my ($debug,$verbose,$help,$infile,$header,$dir);
 
 my $result = GetOptions(
     "infile:s"    =>  \$infile,
+    "dir:s"     =>  \$dir,
+    "header"    =>  \$header,
     "debug"     =>  \$debug,
     "verbose"   =>  \$verbose,
     "help"      =>  \$help,
@@ -42,10 +44,12 @@ sub help {
 
     say <<HELP;
 
-    "infile:s"    =>  \$infile,
-    "debug"     =>  \$debug,
-    "verbose"   =>  \$verbose,
-    "help"      =>  \$help,
+    --infile
+    --dir
+    --header
+    --debug
+    --verbose
+    --help
 
 HELP
 
@@ -77,6 +81,11 @@ quast.py -o quast --threads 4 --gene-finding --gene-thresholds 300 --contig-thre
 =cut
 
 my ($kmer,$scaffolds,$largest_scaffold,$n50,$total_length,$gc,$genes) = ('n/a','n/a','n/a','n/a','n/a','n/a','n/a');
+my $headers = "|Kmer|Scaffolds|Longest Scaffold|N50|Total Length|%GC|Genes|";
+
+if ($dir) {
+    $infile = "$dir/report.tsv";
+}
 
 if (-e $infile) {
     if ($infile =~ /k(\d+)/i) {
@@ -125,6 +134,6 @@ if (-e $infile) {
 
 close(IN);
 
-
+say $headers if ($header);
 say "|$kmer|$scaffolds|$largest_scaffold|$n50|$total_length|$gc|$genes|";
 

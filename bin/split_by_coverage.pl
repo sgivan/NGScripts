@@ -29,7 +29,7 @@ use Bio::SeqIO;
 use Statistics::Descriptive;
 use Statistics::TTest;
 
-my ($debug,$verbose,$help,$infile,$outfile,$coverage);
+my ($debug,$verbose,$help,$infile,$outfile,$coverage,$spades,$soapdenovo,$stats,$justsummary,$ttest,$nosummary);
 
 my $result = GetOptions(
     "debug"         =>  \$debug,
@@ -38,6 +38,12 @@ my $result = GetOptions(
     "infile:s"      =>  \$infile,
     "outfile:s"     =>  \$outfile,
     "coverage:i"    =>  \$coverage,
+    "spades"        =>  \$spades,
+    "soapdenovo"    =>  \$soapdenovo,
+    "stats"         =>  \$stats,
+    "justsummary"   =>  \$justsummary,
+    "nosummary"     =>  \$nosummary,
+    "ttest"         =>  \$ttest,
 );
 
 if ($help) {
@@ -57,7 +63,12 @@ sub help {
     --infile
     --outfile
     --coverage
-
+    --spades
+    --soapdenovo
+    --stats
+    --justsummary
+    --nosummary
+    --ttest
 
 HELP
 
@@ -80,21 +91,26 @@ my $inseqs = Bio::SeqIO->new(
     -format =>  'fasta',
 );
 
-my ($outfile1,$outfile2) = ($outfile . "_le$coverage", $outfile . "_gt$coverage");
+my ($outfile1,$outfile2,$outseqs1,$outseqs2) = ($outfile . "_le$coverage", $outfile . "_gt$coverage");
 
-my $outseqs1 = Bio::SeqIO->new(
-    -file   =>  ">$outfile1",
-    -format =>  'fasta',
-);
-my $outseqs2 = Bio::SeqIO->new(
-    -file   =>  ">$outfile2",
-    -format =>  'fasta',
-);
+unless ($justsummary) {
+    $outseqs1 = Bio::SeqIO->new(
+        -file   =>  ">$outfile1",
+        -format =>  'fasta',
+    );
+    $outseqs2 = Bio::SeqIO->new(
+        -file   =>  ">$outfile2",
+        -format =>  'fasta',
+    );
+}
 
-open(STATS1,">",$outfile1 . ".stats");
-open(STATS2,">",$outfile2 . ".stats");
+if ($stats) {
+    open(STATS1,">",$outfile1 . ".stats");
+    open(STATS2,">",$outfile2 . ".stats");
+}
 
-my ($stats1,$stats2,@stats1vals,@stats2vals) = (Statistics::Descriptive::Sparse->new(),Statistics::Descriptive::Sparse->new());
+my ($stats1,$stats2,$lengthstats1,$lengthstats2,@stats1vals,@stats2vals,@lengthstats1vals,@lengthstats2vals) = 
+(Statistics::Descriptive::Sparse->new(),Statistics::Descriptive::Sparse->new(),Statistics::Descriptive::Sparse->new(),Statistics::Descriptive::Sparse->new());
 
 if ($debug) {
     say "\$inseqs isa '" . ref($inseqs) . "'";
@@ -103,50 +119,86 @@ if ($debug) {
 
 while (my $seq = $inseqs->next_seq()) {
     say $seq->id() if ($verbose);
-    # fasta headers look like:
+    # SPAdes fasta headers look like:
     # NODE_49_length_21441_cov_309.893_ID_97
 
     my ($seqlength,$seqcoverage) = ();
+    if ($spades) {
+        if ($seq->id() =~ /NODE_\d+_length_(\d+)_cov_([\d.]+)_ID_\d+/) {
+            $seqlength = $1;
+            $seqcoverage = $2;
+            say "\tlength: '$seqlength'\n\tcoverage: '$seqcoverage'" if ($verbose);
 
-    if ($seq->id() =~ /NODE_\d+_length_(\d+)_cov_([\d.]+)_ID_\d+/) {
-        $seqlength = $1;
-        $seqcoverage = $2;
-        say "\tlength: '$seqlength'\n\tcoverage: '$seqcoverage'" if ($verbose);
-
-        if ($seqcoverage <= $coverage) {
-            $outseqs1->write_seq($seq);
-            push(@stats1vals,$seqcoverage);
-            $stats1->add_data($seqcoverage);
-            say STATS1 $seq->id() . "\t$seqcoverage\t$seqlength";
-        } else {
-            $outseqs2->write_seq($seq);
-            push(@stats2vals,$seqcoverage);
-            $stats2->add_data($seqcoverage);
-            say STATS2 $seq->id() . "\t$seqcoverage\t$seqlength";
         }
+    } elsif ($soapdenovo) {
+        $seqlength = $seq->length();
+        $seqcoverage = $seq->description();
+        $coverage = 0 unless ($coverage);
     }
 
+    if ($seqcoverage <= $coverage) {
+        $outseqs1->write_seq($seq) unless ($justsummary);
+        # coverage stats
+        push(@stats1vals,$seqcoverage);
+        $stats1->add_data($seqcoverage);
+        # sequence length stats
+        push(@lengthstats1vals,$seqlength);
+        $lengthstats1->add_data($seqlength);
+        say STATS1 $seq->id() . "\t$seqcoverage\t$seqlength" if ($stats);
+    } else {
+        $outseqs2->write_seq($seq) unless ($justsummary);
+        # coverage stats
+        push(@stats2vals,$seqcoverage);
+        $stats2->add_data($seqcoverage);
+        # sequence length stats
+        push(@lengthstats2vals,$seqlength);
+        $lengthstats2->add_data($seqlength);
+        say STATS2 $seq->id() . "\t$seqcoverage\t$seqlength" if ($stats);
+    }
 }
-close(STATS1);
-close(STATS2);
 
-say "Summary Statistics";
-say "Sequence coverage le $coverage";
-say "\tn: " . $stats1->count();
-say "\tMean coverage: " . $stats1->mean();
-say "\tVariance of coverage: " . $stats1->variance();
-say "\tSD: " . $stats1->standard_deviation();
-say "\tmin: " . $stats1->min() . ", max: " . $stats1->max();
+if ($stats) {
+    close(STATS1);
+    close(STATS2);
+}
 
-say "Sequence coverage gt $coverage";
-say "\tn: " . $stats2->count();
-say "\tMean coverage: " . $stats2->mean();
-say "\tVariance of coverage: " . $stats2->variance();
-say "\tSD: " . $stats2->standard_deviation();
-say "\tmin: " . $stats2->min() . ", max: " . $stats2->max();
+unless ($nosummary) {
+    say "Summary Statistics of Coverage";
+    say "Sequence coverage le $coverage";
+    say "\tn: " . $stats1->count();
+    say "\tMean: " . $stats1->mean() . "\tmin: " . $stats1->min() . "\tmax:" . $stats1->max();
+    say "\tVariance: " . $stats1->variance() . "\tSD: " . $stats1->standard_deviation();
 
-my $ttest = Statistics::TTest->new();
-$ttest->set_significance(90);
-$ttest->load_data(\@stats1vals,\@stats2vals);
-$ttest->output_t_test();
+    say "Sequence coverage gt $coverage";
+    say "\tn: " . $stats2->count();
+    say "\tMean: " . $stats2->mean() . "\tmin: " . $stats2->min() . "\tmax:" . $stats2->max();
+    say "\tVariance: " . $stats2->variance() . "\tSD: " . $stats2->standard_deviation();
+
+
+    say "\nSummary Statistics of Sequence Length";
+    say "Sequence coverage le $coverage";
+    say "\tn: " . $lengthstats1->count();
+    say "\tMean: " . $lengthstats1->mean() . "\tmin: " . $lengthstats1->min() . "\tmax:" . $lengthstats1->max();
+    say "\tVariance: " . $lengthstats1->variance() . "\tSD: " . $lengthstats1->standard_deviation();
+
+    say "Sequence coverage gt $coverage";
+    say "\tn: " . $lengthstats2->count();
+    say "\tMean: " . $lengthstats2->mean() . "\tmin: " . $lengthstats2->min() . "\tmax:" . $lengthstats2->max();
+    say "\tVariance: " . $lengthstats2->variance() . "\tSD: " . $lengthstats2->standard_deviation();
+}
+
+if ($ttest) {
+    say "\nTTest Analysis";
+    say "T-test of Coverage Distributions";
+    my $cttest = Statistics::TTest->new();
+    $cttest->set_significance(90);
+    $cttest->load_data(\@stats1vals,\@stats2vals);
+    $cttest->output_t_test();
+
+    say "\nT-test of Length Distributions";
+    my $lttest = Statistics::TTest->new();
+    $lttest->set_significance(90);
+    $lttest->load_data(\@lengthstats1vals,\@lengthstats2vals);
+    $lttest->output_t_test();
+}
 
