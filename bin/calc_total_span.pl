@@ -26,16 +26,23 @@ use Getopt::Long; # use GetOptions function to for CL args
 use warnings;
 use strict;
 
-my ($debug,$verbose,$help,$infile);
+my ($debug,$verbose,$help,$infile,$report,$tab,$noheader);
 
 my $result = GetOptions(
     "debug"     =>  \$debug,
     "verbose"   =>  \$verbose,
     "help"      =>  \$help,
     "infile:s"  =>  \$infile,
+    "report"    =>  \$report,
+    "tab"       =>  \$tab,
+    "noheader"  =>  \$noheader,
 );
 
 $infile = 'infile' unless ($infile);
+
+if (!$report && !$tab) {
+    $report = 1;
+}
 
 if ($help) {
     help();
@@ -82,22 +89,31 @@ while (<$IN>) {
     $last_stop = $local_stop;
 }
 
-if (1) {
+if ($reference_length > $global_stop) {
+    $global_gap_sum += ($reference_length - $global_stop);
+}
+
+if ($report) {
     say "global_start = '$global_start', global_stop = '$global_stop', reference length = '$reference_length'";
     say "global alignment sum = $global_align_sum";
     say "global gap sum = $global_gap_sum";
     printf "total %% of reference sequence covered: %2.2f\n", $global_align_sum/$reference_length * 100;
     say "fully contained fragments: $contained";
+} elsif ($tab) {
+    say "infile\tglobal start\tglobal stop\treference length\tglobal align sum\tglobal gap sum\t\% ref covered\tcontained fragments" unless ($noheader);
+    say "$infile\t$global_start\t$global_stop\t$reference_length\t$global_align_sum\t$global_gap_sum\t" . ($global_align_sum/$reference_length) * 100 . "\t$contained";
 }
 
 sub help {
 
     say <<HELP;
+
     "debug"     =>  \$debug,
     "verbose"   =>  \$verbose,
     "help"      =>  \$help,
     "infile:s"  =>  \$infile,
-
+    "report"    =>  \$report,
+    "tab"       =>  \$tab,
 
 HELP
 
