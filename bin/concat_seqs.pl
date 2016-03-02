@@ -8,7 +8,7 @@
 #  DESCRIPTION: Will concatenate a set of sequences with multiple N's separating them
 #
 #      OPTIONS: ---
-# REQUIREMENTS: autodie, Getopt::Long, Bio::SeqIO, Bio::Seq::SeqFactory
+# REQUIREMENTS: autodie, Getopt::Long, Bio::SeqIO, Bio::Seq::SeqFactory, Bio::SeqFeature::Lite, Bio::Tools::GFF
 #         BUGS: ---
 #        NOTES: ---
 #       AUTHOR: Scott A. Givan
@@ -61,6 +61,15 @@ sub help {
 
 say <<HELP;
 
+    "infile:s"  =>  \$infile,
+    "outfile:s" =>  \$outfile,
+    "N:i"       =>  \$Ns,
+    "format:s"  =>  \$fileformat,
+    "gff"       =>  \$gff,
+    "gtf"       =>  \$gtf,
+    "debug"     =>  \$debug,
+    "verbose"   =>  \$verbose,
+    "help"      =>  \$help,
 
 HELP
 
